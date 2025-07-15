@@ -587,3 +587,820 @@ getgenv().S.RunS.Stepped:Connect(function()
         end
     end
 end)
+
+-- =====================
+-- DESYNC UI (полный каркас, исправленный Keybind и Colorpicker, сбалансированное распределение секций)
+-- =====================
+getgenv().DesyncTab = getgenv().PepsisWorld:CreateTab({ Name = "desync" })
+
+-- Секции слева
+getgenv().DesyncMainSection = getgenv().DesyncTab:CreateSection({ Name = "Main", Side = "Left" })
+getgenv().DesyncVoidSection = getgenv().DesyncTab:CreateSection({ Name = "Void", Side = "Left" })
+getgenv().DesyncVisualSection = getgenv().DesyncTab:CreateSection({ Name = "Visuals", Side = "Left" })
+-- Удаляем TargetStrafe из UI
+-- (блок Target Strafe Section полностью удалён)
+
+-- Секции справа
+getgenv().DesyncXSection = getgenv().DesyncTab:CreateSection({ Name = "X Position", Side = "Right" })
+getgenv().DesyncYSection = getgenv().DesyncTab:CreateSection({ Name = "Y Position", Side = "Right" })
+getgenv().DesyncZSection = getgenv().DesyncTab:CreateSection({ Name = "Z Position", Side = "Right" })
+getgenv().DesyncPitchSection = getgenv().DesyncTab:CreateSection({ Name = "Pitch", Side = "Right" })
+getgenv().DesyncYawSection = getgenv().DesyncTab:CreateSection({ Name = "Yaw", Side = "Right" })
+getgenv().DesyncRollSection = getgenv().DesyncTab:CreateSection({ Name = "Roll", Side = "Right" })
+getgenv().DesyncHookSection = getgenv().DesyncTab:CreateSection({ Name = "Hook", Side = "Left" })
+
+-- =====================
+-- Глобальные флаги состояния Desync
+getgenv().DesyncState = {
+    Active = false, -- одно состояние (тогл)
+    Void = false, -- void режим
+}
+
+-- Main Section с одним состоянием
+getgenv().DesyncMainSection:AddToggle({
+    Name = "Enabled",
+    Flag = "desync_enabled",
+    Value = false,
+    Callback = function(v)
+        getgenv().DesyncState.Active = v
+    end,
+    Keybind = {
+        Name = "Desync Key",
+        Flag = "desync_key",
+        Callback = function()
+            getgenv().DesyncState.Active = not getgenv().DesyncState.Active
+        end
+    }
+})
+
+-- Void Section
+getgenv().DesyncVoidSection:AddToggle({
+    Name = "Void",
+    Flag = "desync_void",
+    Value = false,
+    Callback = function(v)
+        getgenv().DesyncState.Void = v
+        if v then
+            getgenv().Desync:SetStatus(true)
+            getgenv().Desync:OverwritePosition(Vector3.new(9e9, -9e9, 9e9))
+        else
+            getgenv().Desync:SetStatus(nil)
+            getgenv().Desync:RemoveOverwrite()
+        end
+    end,
+    Keybind = {
+        Name = "Void Key",
+        Flag = "desync_void_key",
+        Callback = function(isDown)
+            if isDown and getgenv().DesyncState.Void then
+                getgenv().Desync:SetStatus(true)
+                getgenv().Desync:OverwritePosition(Vector3.new(9e9, -9e9, 9e9))
+            else
+                getgenv().Desync:SetStatus(nil)
+                getgenv().Desync:RemoveOverwrite()
+            end
+        end
+    }
+})
+
+-- Visuals Section
+getgenv().DesyncVisualSection:AddToggle({ Name = "Visualize", Flag = "desync_vis", Value = false })
+getgenv().DesyncVisualSection:AddColorpicker({ Name = "Desync Color", Flag = "desync_vis_color", Callback = function()
+    if getgenv().Desync and getgenv().Desync.CloneColorUpdate then
+        getgenv().Desync:CloneColorUpdate()
+    end
+end })
+
+-- Удаляем TargetStrafe из UI
+-- (блок Target Strafe Section полностью удалён)
+
+-- Helper for position sections (исправлено: корректные min/max)
+local function addPositionSection(section, prefix, minVal, maxVal, deg)
+    section:AddToggle({ Name = prefix .. (deg and " Position" or " Position"), Flag = "desync_"..string.lower(prefix), Value = false })
+    section:AddDropdown({
+        Name = prefix .. " Mode",
+        Flag = "desync_mode_"..string.lower(prefix),
+        List = {"Static", "Lerp", "Random"},
+        Value = "Static"
+    })
+    section:AddSlider({ Name = "Min", Flag = "desync_min_"..string.lower(prefix), Value = minVal, Min = minVal, Max = maxVal, Decimals = 1, Suffix = deg and "°" or "st" })
+    section:AddSlider({ Name = "Max", Flag = "desync_max_"..string.lower(prefix), Value = maxVal, Min = minVal, Max = maxVal, Decimals = 1, Suffix = deg and "°" or "st" })
+    section:AddSlider({ Name = "Value", Flag = "desync_val_"..string.lower(prefix), Value = 0, Min = minVal, Max = maxVal, Decimals = 1, Suffix = deg and "°" or "st" })
+    section:AddSlider({ Name = "Lerp Speed", Flag = "desync_speed_"..string.lower(prefix), Value = 1, Min = 1, Max = 30, Decimals = 1 })
+end
+
+-- X/Y/Z: -300..300, Pitch/Yaw/Roll: -360..360 (градусы)
+addPositionSection(getgenv().DesyncXSection, "X", -300, 300, false)
+addPositionSection(getgenv().DesyncYSection, "Y", -300, 300, false)
+addPositionSection(getgenv().DesyncZSection, "Z", -300, 300, false)
+addPositionSection(getgenv().DesyncPitchSection, "Pitch", -360, 360, true)
+addPositionSection(getgenv().DesyncYawSection, "Yaw", -360, 360, true)
+addPositionSection(getgenv().DesyncRollSection, "Roll", -360, 360, true)
+
+-- Hook Section
+getgenv().DesyncHookSection:AddToggle({ Name = "Use Hook", Flag = "desync_hook", Value = false })
+-- =====================
+-- КОНЕЦ DESYNC UI (полный каркас, исправленный Keybind и Colorpicker, сбалансированное распределение секций)
+-- =====================
+
+-- =====================
+-- DESYNC LOGIC (фикс: материал клона, раздельные состояния, void, сброс после смерти)
+-- =====================
+
+local player = game:GetService("Players").LocalPlayer
+getgenv().Controller = getgenv().Controller or {}
+local function updateController(char)
+    getgenv().Controller.Character = char
+    getgenv().Controller.RootPart = char:FindFirstChild("HumanoidRootPart")
+    getgenv().Controller.Humanoid = char:FindFirstChildOfClass("Humanoid")
+end
+if player.Character then updateController(player.Character) end
+player.CharacterAdded:Connect(function(char)
+    updateController(char)
+    -- Не сбрасываем состояния DesyncState!
+    -- Пересоздаём клон если был активен визуал
+    if getgenv().Desync and getgenv().library_flags and getgenv().library_flags["desync_vis"] then
+        getgenv().Desync:DestroyClonedCharacter()
+        getgenv().Desync:CloneCharacter()
+    end
+end)
+
+local Flags = getgenv().library_flags
+local Utility = Utility or {}
+local Visuals = Visuals or {}
+local mathsin, mathrad, mathrandom, osclock = math.sin, math.rad, math.random, os.clock
+local Vector3new = Vector3.new
+local CFramenew = CFrame.new
+local CFrameAngles = CFrame.Angles
+local Aimbot = Aimbot or {}
+local SilentAim = SilentAim or {}
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+local Desync = {
+    Positions = { Old = nil, New = nil },
+    Overwriten = nil,
+    ClonedCharacter = nil,
+    NewStatus = nil,
+}
+getgenv().Desync = Desync
+
+function Desync:Active()
+    -- Активно если включён тогл или void
+    return ((getgenv().DesyncState.Active or getgenv().DesyncState.Void or self.NewStatus) and getgenv().Controller.RootPart)
+end
+
+function Desync:SetStatus(status)
+    self.NewStatus = status
+end
+
+function Desync:GetPositions()
+    local Positions = self.Positions
+    local Status = self:Active()
+    if not Status then return end
+    return Positions.Old, Positions.New
+end
+
+function Desync:RemoveOffset()
+    local Positions = self.Positions
+    local Status = self:Active()
+    if not (Status and Positions.Old and Positions.New) then return end
+    if Utility.CFrameToVector3 then
+        Camera.CFrame = Camera.CFrame - Utility:CFrameToVector3(Positions.New - Utility:CFrameToVector3(Positions.Old))
+    end
+end
+
+function Desync:GetLerpValue(pulse, min, max, speed)
+    speed = speed or 1
+    local NormalizedSin = (mathsin(pulse * speed) + 1) / 2
+    return min + NormalizedSin * (max - min)
+end
+
+function Desync:GetValue(pos_type)
+    local ClockPulse = osclock()
+    local Mode = Flags["desync_mode_" .. pos_type] or "Static"
+    local Min = tonumber(Flags["desync_min_" .. pos_type]) or 0
+    local Max = tonumber(Flags["desync_max_" .. pos_type]) or 0
+    local Val = tonumber(Flags["desync_val_" .. pos_type]) or 0
+    local Speed = tonumber(Flags["desync_speed_" .. pos_type]) or 1
+    if Flags["desync_" .. pos_type] then
+        if Mode == "Static" then
+            return Val
+        elseif Mode == "Lerp" then
+            return self:GetLerpValue(ClockPulse, Min, Max, Speed)
+        elseif Mode == "Random" then
+            return mathrandom(Min * 100, Max * 100) / 100
+        end
+    end
+    return 0
+end
+
+function Desync:OverwritePosition(position)
+    self.Overwriten = position
+end
+
+function Desync:RemoveOverwrite()
+    self.Overwriten = nil
+end
+
+local function isClonedCharacterValid(self)
+    return self.ClonedCharacter and self.ClonedCharacter.Character and self.ClonedCharacter.Character.Parent
+end
+
+function Desync:CloneCharacter()
+    local Character = getgenv().Controller.Character
+    if not Character then return end
+    Character.Archivable = true
+    local ClonedCharacter = Character:Clone()
+    ClonedCharacter.Archivable = true
+    ClonedCharacter.Name = "\0"
+    ClonedCharacter.Parent = workspace
+    Character.Archivable = false
+    local Humanoid = ClonedCharacter:FindFirstChildWhichIsA("Humanoid")
+    local HumanoidRootPart = Humanoid and Humanoid.Parent:FindFirstChild("HumanoidRootPart")
+    for _,v in ipairs(ClonedCharacter:GetChildren()) do
+        if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
+            if v.Transparency ~= 1 then
+                local Color = Flags["desync_vis_color"]
+                local color3, alpha
+                if typeof(Color) == "table" and Color.c then
+                    color3 = Color.c
+                    alpha = 1 - (Color.a or 0)
+                elseif typeof(Color) == "Color3" then
+                    color3 = Color
+                    alpha = 1
+                else
+                    color3 = Color3.new(1,1,1)
+                    alpha = 1
+                end
+                if Visuals.ApplyChams then
+                    Visuals:ApplyChams(v, "ForceField", color3, alpha, 0)
+                else
+                    v.Material = Enum.Material.ForceField
+                end
+            end
+            v.CanCollide = false
+        else
+            v:Destroy()
+        end
+    end
+    if Humanoid then Humanoid:Destroy() end
+    if HumanoidRootPart then HumanoidRootPart.Anchored = true end
+    self.ClonedCharacter = { Character = ClonedCharacter, RootPart = HumanoidRootPart }
+end
+
+function Desync:UpdateCharacter()
+    local ClonedCharacter = self.ClonedCharacter
+    if ClonedCharacter then
+        local Character = ClonedCharacter.Character
+        if Character then
+            for _,v in ipairs(Character:GetChildren()) do
+                if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
+                    if v.Transparency ~= 1 then
+                        local Color = Flags["desync_vis_color"]
+                        local color3, alpha
+                        if typeof(Color) == "table" and Color.c then
+                            color3 = Color.c
+                            alpha = 1 - (Color.a or 0)
+                        elseif typeof(Color) == "Color3" then
+                            color3 = Color
+                            alpha = 1
+                        else
+                            color3 = Color3.new(1,1,1)
+                            alpha = 1
+                        end
+                        if Visuals.ApplyChams then
+                            Visuals:ApplyChams(v, "ForceField", color3, alpha, 0)
+                        else
+                            v.Material = Enum.Material.ForceField
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function Desync:DestroyClonedCharacter()
+    local ClonedCharacter = self.ClonedCharacter
+    if ClonedCharacter and ClonedCharacter.Character then
+        ClonedCharacter.Character:Destroy()
+        self.ClonedCharacter = nil
+    end
+end
+
+-- Функция для обновления цвета клона
+function Desync:CloneColorUpdate()
+    if not self.ClonedCharacter then return end
+    local Character = self.ClonedCharacter.Character
+    if not Character then return end
+    for _,v in ipairs(Character:GetChildren()) do
+        if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
+            if v.Transparency ~= 1 then
+                local Color = Flags["desync_vis_color"]
+                local color3, alpha
+                if typeof(Color) == "table" and Color.c then
+                    color3 = Color.c
+                    alpha = 1 - (Color.a or 0)
+                elseif typeof(Color) == "Color3" then
+                    color3 = Color
+                    alpha = 1
+                else
+                    color3 = Color3.new(1,1,1)
+                    alpha = 1
+                end
+                if Visuals.ApplyChams then
+                    Visuals:ApplyChams(v, "ForceField", color3, alpha, 0)
+                else
+                    v.Material = Enum.Material.ForceField
+                end
+            end
+        end
+    end
+end
+
+function Desync:Think()
+    local Root = getgenv().Controller.RootPart
+    local Status = self:Active()
+    local Positions = self.Positions
+    local ClonedCharacter = self.ClonedCharacter
+    if not Status then
+        Positions.Old = nil
+        Positions.New = nil
+        if isClonedCharacterValid(self) then self:DestroyClonedCharacter() end
+        return
+    end
+    if not Flags["desync_vis"] and isClonedCharacterValid(self) then self:DestroyClonedCharacter() end
+    if Flags["desync_vis"] and not isClonedCharacterValid(self) then self:CloneCharacter() end
+    ClonedCharacter = self.ClonedCharacter
+    Positions.Old = Root.CFrame
+    if self.Overwriten then
+        Root.CFrame = CFramenew(self.Overwriten)
+    else
+        local DesyncFactor = CFramenew(Vector3new(
+            self:GetValue("x"),
+            self:GetValue("y"),
+            self:GetValue("z")
+        ))
+        DesyncFactor = DesyncFactor * CFrameAngles(
+            mathrad(self:GetValue("pitch")),
+            mathrad(self:GetValue("yaw")),
+            mathrad(self:GetValue("roll"))
+        )
+        Root.CFrame = Root.CFrame * DesyncFactor
+    end
+    Positions.New = Root.CFrame
+    if ClonedCharacter and ClonedCharacter.RootPart then
+        ClonedCharacter.RootPart.CFrame = Positions.New
+    end
+    RunService.RenderStepped:Wait()
+    Root.CFrame = Positions.Old
+end
+
+-- Heartbeat
+RunService.Heartbeat:Connect(function()
+    Desync:Think()
+end)
+
+-- Hook на CFrame
+local OldIndex
+OldIndex = hookmetamethod(game, "__index", newcclosure(function(self, prop)
+    if not checkcaller() then
+        if prop == "CFrame" then
+            if Desync:Active() and Flags["desync_hook"] and self == getgenv().Controller.RootPart then
+                local OldPosition = Desync:GetPositions()
+                if OldPosition then
+                    return OldPosition
+                end
+            end
+        end
+    end
+    return OldIndex(self, prop)
+end))
+
+-- Offset fix
+if not Flags["desync_hook"] then
+    Desync:RemoveOffset()
+end
+-- =====================
+-- КОНЕЦ DESYNC LOGIC (фикс)
+-- =====================
+
+-- Переменная для хранения текущей подписки на здоровье цели
+getgenv()._targetHealthConn = nil
+getgenv()._lastTarget = nil
+
+-- Функция для отслеживания урона по цели
+local function trackTargetHealth(targetPlayer)
+    -- Очищаем предыдущую подписку
+    if getgenv()._targetHealthConn then
+        getgenv()._targetHealthConn:Disconnect()
+        getgenv()._targetHealthConn = nil
+    end
+    if not targetPlayer or not targetPlayer.Character then return end
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local lastHealth = humanoid.Health
+    getgenv()._targetHealthConn = humanoid.HealthChanged:Connect(function(newHealth)
+        if newHealth < lastHealth then
+            local damage = lastHealth - newHealth
+            -- Можно определить часть тела через Raycast или логику попадания, пока "Unknown"
+            getgenv().OnTargetHit(targetPlayer, damage, newHealth, "Unknown", function(msg)
+                if getgenv().library and getgenv().library.Notify then
+                    getgenv().library:Notify({Text = msg, Time = 2})
+                end
+            end)
+            lastHealth = newHealth
+        elseif newHealth < humanoid.MaxHealth then
+            -- обновляем lastHealth только если не хилл, чтобы не реагировать на хилл
+            lastHealth = newHealth
+        end
+    end)
+    humanoid.Died:Connect(function()
+        if getgenv()._targetHealthConn then
+            getgenv()._targetHealthConn:Disconnect()
+            getgenv()._targetHealthConn = nil
+        end
+    end)
+end
+
+-- Хук на выбор новой цели аимбота (TP)
+local oldTP = getgenv().TP
+local function checkTargetChange()
+    if getgenv().TP ~= getgenv()._lastTarget then
+        getgenv()._lastTarget = getgenv().TP
+        if getgenv().TP then
+            trackTargetHealth(getgenv().TP)
+        else
+            if getgenv()._targetHealthConn then
+                getgenv()._targetHealthConn:Disconnect()
+                getgenv()._targetHealthConn = nil
+            end
+        end
+    end
+end
+-- Проверяем смену цели каждый кадр
+getgenv().S.RunS.RenderStepped:Connect(checkTargetChange)
+
+-- Добавляем секцию Spoofers во вкладку Misc
+getgenv().SpoofersSection = getgenv().Misc:CreateSection({ Name = "Spoofers" })
+
+-- Ping Spoofer UI
+getgenv().PingSpoofToggle = getgenv().SpoofersSection:AddToggle({
+    Name = "Ping Spoofer",
+    Flag = "ping_spoofer_enabled",
+    Value = false
+})
+getgenv().PingSpoofMin = getgenv().SpoofersSection:AddTextbox({
+    Name = "Min Ping",
+    Flag = "ping_spoofer_min",
+    Value = 20,
+    Type = "number"
+})
+getgenv().PingSpoofMax = getgenv().SpoofersSection:AddTextbox({
+    Name = "Max Ping",
+    Flag = "ping_spoofer_max",
+    Value = 50,
+    Type = "number"
+})
+
+-- Memory Spoofer UI
+getgenv().MemorySpoofToggle = getgenv().SpoofersSection:AddToggle({
+    Name = "Memory Spoofer",
+    Flag = "memory_spoofer_enabled",
+    Value = false
+})
+getgenv().MemorySpoofMin = getgenv().SpoofersSection:AddTextbox({
+    Name = "Min Memory",
+    Flag = "memory_spoofer_min",
+    Value = 800,
+    Type = "number"
+})
+getgenv().MemorySpoofMax = getgenv().SpoofersSection:AddTextbox({
+    Name = "Max Memory",
+    Flag = "memory_spoofer_max",
+    Value = 1100,
+    Type = "number"
+})
+
+-- Локальная логика спуферов
+local function spoofPing()
+    local minPing = tonumber(getgenv().PingSpoofMin:Get()) or 20
+    local maxPing = tonumber(getgenv().PingSpoofMax:Get()) or 50
+    local PingLabel
+    for _, v in pairs(game.CoreGui.RobloxGui.PerformanceStats:GetChildren()) do
+        if v.Name == "PS_Button" and v.StatsMiniTextPanelClass.TitleLabel.Text == "Ping" then
+            PingLabel = v.StatsMiniTextPanelClass.ValueLabel
+            break
+        end
+    end
+    if PingLabel then
+        local updating = false
+        PingLabel:GetPropertyChangedSignal("Text"):Connect(function()
+            if not getgenv().PingSpoofToggle:Get() then return end
+            if updating then return end
+            updating = true
+            local fakePing = math.random(minPing, maxPing)
+            PingLabel.Text = fakePing .. " ms"
+            updating = false
+        end)
+    end
+end
+
+local function spoofMemory()
+    local minMem = tonumber(getgenv().MemorySpoofMin:Get()) or 800
+    local maxMem = tonumber(getgenv().MemorySpoofMax:Get()) or 1100
+    local MemoryLabel
+    for _, v in pairs(game.CoreGui.RobloxGui.PerformanceStats:GetChildren()) do
+        if v.Name == "PS_Button" and v.StatsMiniTextPanelClass.TitleLabel.Text == "Mem" then
+            MemoryLabel = v.StatsMiniTextPanelClass.ValueLabel
+            break
+        end
+    end
+    if MemoryLabel then
+        MemoryLabel:GetPropertyChangedSignal("Text"):Connect(function()
+            if not getgenv().MemorySpoofToggle:Get() then return end
+            local Random = math.random(minMem, maxMem)
+            Random = math.floor(Random * 1.23)
+            MemoryLabel.Text = tostring(Random) .. " MB"
+        end)
+    end
+end
+
+-- Автоматически активируем спуферы при включении тоглов
+if getgenv().PingSpoofToggle:Get() then spoofPing() end
+getgenv().PingSpoofToggle.Options.Callback = function(v)
+    if v then spoofPing() end
+end
+if getgenv().MemorySpoofToggle:Get() then spoofMemory() end
+getgenv().MemorySpoofToggle.Options.Callback = function(v)
+    if v then spoofMemory() end
+end
+
+-- Добавляем новую секцию Visuals справа во вкладку Rage
+getgenv().RageVisualsSection = getgenv().Rage:CreateSection({ Name = "Visuals", Side = "Right" })
+
+-- Тогл HitChams
+getgenv().HitChamsToggle = getgenv().RageVisualsSection:AddToggle({
+    Name = "HitChams",
+    Flag = "rage_hit_chams",
+    Value = false
+})
+
+-- Настройки HitChams
+getgenv().HitChamsColor = getgenv().RageVisualsSection:AddColorpicker({
+    Name = "HitChams Color",
+    Flag = "rage_hit_chams_color",
+    Value = Color3.fromRGB(255,0,0)
+})
+getgenv().HitChamsMaterial = getgenv().RageVisualsSection:AddDropdown({
+    Name = "HitChams Material",
+    Flag = "rage_hit_chams_material",
+    List = {"Neon", "ForceField", "Plastic", "SmoothPlastic", "Glass", "Metal"},
+    Value = "Neon"
+})
+getgenv().HitChamsTransparency = getgenv().RageVisualsSection:AddSlider({
+    Name = "HitChams Transparency",
+    Flag = "rage_hit_chams_transparency",
+    Min = 0,
+    Max = 1,
+    Decimals = 2,
+    Value = 0
+})
+getgenv().HitChamsDuration = getgenv().RageVisualsSection:AddSlider({
+    Name = "HitChams Duration",
+    Flag = "rage_hit_chams_duration",
+    Min = 0.1,
+    Max = 5,
+    Decimals = 1,
+    Value = 2
+})
+
+-- Логика HitChams с учётом настроек
+local function HitChams(Player)
+    if not Player or not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then return end
+
+    local BodyParts = {
+        "Head", "UpperTorso", "LowerTorso",
+        "LeftUpperArm", "LeftLowerArm", "LeftHand",
+        "RightUpperArm", "RightLowerArm", "RightHand",
+        "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+        "RightUpperLeg", "RightLowerLeg", "RightFoot"
+    }
+
+    Player.Character.Archivable = true
+    local Cloned = Player.Character:Clone()
+    Cloned.Archivable = true
+    Cloned.Name = "HitChamsClone"
+    Cloned.Parent = workspace -- НЕ в Player, а в workspace
+
+    -- Удаляем всё, что не части тела r15
+    for _, Part in ipairs(Cloned:GetChildren()) do
+        if Part:IsA("BasePart") then
+            local valid = false
+            for _, validPart in ipairs(BodyParts) do
+                if Part.Name == validPart then valid = true break end
+            end
+            if not valid then Part:Destroy() end
+        elseif Part:IsA("Accessory") or Part:IsA("Tool") or Part.Name == "face" or Part:IsA("Shirt") or Part:IsA("Pants") or Part:IsA("Hat") then
+            Part:Destroy()
+        end
+    end
+
+    if Cloned:FindFirstChild("Humanoid") then Cloned.Humanoid:Destroy() end
+
+    -- Смещение клона чуть выше (-0.2 по Y)
+    if Cloned:FindFirstChild("HumanoidRootPart") then
+        Cloned:SetPrimaryPartCFrame(Cloned.HumanoidRootPart.CFrame + Vector3.new(0, -0.2, 0))
+    end
+
+    local color = getgenv().HitChamsColor and getgenv().HitChamsColor:Get() or Color3.fromRGB(255,0,0)
+    local materialName = getgenv().HitChamsMaterial and getgenv().HitChamsMaterial:Get() or "Neon"
+    local material = Enum.Material[materialName] or Enum.Material.Neon
+    local transparency = getgenv().HitChamsTransparency and getgenv().HitChamsTransparency:Get() or 0
+    local duration = getgenv().HitChamsDuration and getgenv().HitChamsDuration:Get() or 2
+
+    for _, BodyPart in ipairs(Cloned:GetChildren()) do
+        if BodyPart:IsA("BasePart") then
+            BodyPart.CanCollide = false
+            BodyPart.Anchored = true
+            BodyPart.Transparency = transparency
+            BodyPart.Color = color
+            BodyPart.Material = material
+        end
+    end
+
+    if Cloned:FindFirstChild("Head") then
+        local Head = Cloned.Head
+        Head.Transparency = transparency
+        Head.Color = color
+        Head.Material = material
+        if Head:FindFirstChild("face") then Head.face:Destroy() end
+        Head.CanCollide = false
+        Head.Anchored = true
+    end
+
+    Cloned.Parent = workspace
+
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, false)
+    local TweenService = game:GetService("TweenService")
+    for _, BodyPart in ipairs(Cloned:GetChildren()) do
+        if BodyPart:IsA("BasePart") then
+            local tween = TweenService:Create(BodyPart, tweenInfo, { Transparency = 1 })
+            tween:Play()
+        end
+    end
+
+    task.delay(duration, function()
+        if Cloned and Cloned.Parent then Cloned:Destroy() end
+    end)
+end
+
+-- Добавляем секцию HitSkeletons справа во вкладку Rage
+getgenv().RageHitSkeletonsSection = getgenv().Rage:CreateSection({ Name = "HitSkeletons", Side = "Right" })
+
+-- Тогл HitSkeletons
+getgenv().HitSkeletonsToggle = getgenv().RageHitSkeletonsSection:AddToggle({
+    Name = "HitSkeletons",
+    Flag = "rage_hit_skeletons",
+    Value = false
+})
+
+-- Логика HitSkeleton
+local function HitSkeleton(Player, color, transparency, duration)
+    if not Player or not Player.Character then return end
+    local bones = {
+        {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+        {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+        {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+        {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}
+    }
+    local lines = {}
+    for _, pair in ipairs(bones) do
+        local a = Player.Character:FindFirstChild(pair[1])
+        local b = Player.Character:FindFirstChild(pair[2])
+        if a and b then
+            local line = Instance.new("Part")
+            line.Size = Vector3.new(0.02, 0.02, (a.Position - b.Position).Magnitude)
+            line.CFrame = CFrame.new(a.Position, b.Position) * CFrame.new(0, 0, -line.Size.Z/2)
+            line.Anchored = true
+            line.CanCollide = false
+            line.Transparency = transparency or 0.5
+            line.Color = color or Color3.fromRGB(155,0,155)
+            line.Material = Enum.Material.Neon
+            line.Parent = workspace
+            table.insert(lines, line)
+        end
+    end
+    task.delay(duration or 2, function()
+        for _, line in ipairs(lines) do if line and line.Parent then line:Destroy() end end
+    end)
+end
+
+-- Добавляем секцию HitSounds справа во вкладку Rage
+getgenv().RageHitSoundsSection = getgenv().Rage:CreateSection({ Name = "HitSounds", Side = "Right" })
+
+-- Список ассетов
+getgenv().HitSoundAssets = {
+    ["None"] = '',
+    ["RIFK7"] = "rbxassetid://9102080552",
+    ["Bubble"] = "rbxassetid://6534947588",
+    ["Minecraft"] = "rbxassetid://8837706727",
+    ["Cod"] = "rbxassetid://160432334",
+    ["Bameware"] = "rbxassetid://3124331820",
+    ["Neverlose"] = "rbxassetid://6534948092",
+    ["Gamesense"] = "rbxassetid://4817809188",
+    ["Rust"] = "rbxassetid://1255040462",
+    ["Bruh"] = "rbxassetid://4578740568",
+    ["Bell"] = "rbxassetid://6534947240",
+    ["Pick"] = "rbxassetid://1347140027",
+    ["Pop"] = "rbxassetid://198598793",
+    ["Sans"] = "rbxassetid://3188795283",
+    ["Fart"] = "rbxassetid://130833677",
+    ["Big"] = "rbxassetid://5332005053",
+    ["Vine"] = "rbxassetid://5332680810",
+    ["Fatality"] = "rbxassetid://6534947869",
+    ["Bonk"] = "rbxassetid://5766898159",
+    ["Totem"] = "rbxassetid://135055101757201",
+    ["CSHS"] = "rbxassetid://9065951723",
+    ["OSU"] = "rbxassetid://7147454322",
+    ["Hitmarker"] = "rbxassetid://160432334",
+    ["skeet"] = "rbxassetid://4817809188",
+    ["Lazer Beam"] = "rbxassetid://130791043",
+    ["Bow Hit"] = "rbxassetid://1053296915",
+    ["Bow"] = "rbxassetid://3442683707",
+    ["TF2 Hitsound"] = "rbxassetid://3455144981",
+    ["TF2 Critical"] = "rbxassetid://296102734"
+}
+
+-- Тогл включения
+getgenv().HitSoundToggle = getgenv().RageHitSoundsSection:AddToggle({
+    Name = "Enable HitSound",
+    Flag = "rage_hit_sound_enabled",
+    Value = false
+})
+-- Dropdown для выбора звука
+getgenv().HitSoundDropdown = getgenv().RageHitSoundsSection:AddDropdown({
+    Name = "HitSound",
+    Flag = "rage_hit_sound",
+    List = (function() local t = {} for k in pairs(getgenv().HitSoundAssets) do table.insert(t, k) end; table.sort(t); return t end)(),
+    Value = "Bameware"
+})
+-- Pitch
+getgenv().HitSoundPitch = getgenv().RageHitSoundsSection:AddSlider({
+    Name = "Pitch",
+    Flag = "rage_hit_sound_pitch",
+    Min = 0.5,
+    Max = 2,
+    Decimals = 2,
+    Value = 1
+})
+-- Volume
+getgenv().HitSoundVolume = getgenv().RageHitSoundsSection:AddSlider({
+    Name = "Volume",
+    Flag = "rage_hit_sound_volume",
+    Min = 0,
+    Max = 5,
+    Decimals = 2,
+    Value = 1
+})
+
+-- Функция проигрывания звука
+local function PlayHitSound()
+    if not (getgenv().HitSoundToggle and getgenv().HitSoundToggle:Get()) then return end
+    local soundName = getgenv().HitSoundDropdown and getgenv().HitSoundDropdown:Get() or "Bameware"
+    local soundId = getgenv().HitSoundAssets[soundName] or "rbxassetid://3124331820"
+    if not soundId or soundId == '' then return end
+    local pitch = getgenv().HitSoundPitch and getgenv().HitSoundPitch:Get() or 1
+    local volume = getgenv().HitSoundVolume and getgenv().HitSoundVolume:Get() or 1
+    local SoundService = game:GetService("SoundService")
+    local sound = Instance.new("Sound")
+    sound.SoundId = soundId
+    sound.Parent = SoundService
+    sound.Volume = volume
+    sound.PlaybackSpeed = pitch
+    sound:Play()
+    sound.Ended:Connect(function() sound:Destroy() end)
+end
+
+-- Основная логика обработки попадания по цели (делаем глобальной)
+getgenv().OnTargetHit = function(targetPlayer, damage, remainingHealth, partName, notifyCallback)
+    if notifyCallback then
+        notifyCallback(string.format("Hit %s on %s for %d (%d left)", targetPlayer.DisplayName, partName, damage, remainingHealth))
+    end
+    -- HitChams
+    if getgenv().HitChamsToggle and getgenv().HitChamsToggle:Get() then
+        HitChams(targetPlayer)
+    end
+    -- HitSkeletons
+    if getgenv().HitSkeletonsToggle and getgenv().HitSkeletonsToggle:Get() then
+        local color = getgenv().HitChamsColor and getgenv().HitChamsColor:Get() or Color3.fromRGB(155,0,155)
+        local transparency = getgenv().HitChamsTransparency and getgenv().HitChamsTransparency:Get() or 0.5
+        local duration = getgenv().HitChamsDuration and getgenv().HitChamsDuration:Get() or 2
+        HitSkeleton(targetPlayer, color, transparency, duration)
+    end
+    -- HitSound
+    PlayHitSound()
+    -- Здесь можно добавить HitEffect
+end
