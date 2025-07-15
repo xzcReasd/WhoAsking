@@ -1266,8 +1266,31 @@ getgenv().HitSkeletonsToggle = getgenv().RageHitSkeletonsSection:AddToggle({
     Value = false
 })
 
--- Логика HitSkeleton
-local function HitSkeleton(Player, color, transparency, duration)
+-- Настройки HitSkeletons
+getgenv().HitSkeletonsColor = getgenv().RageHitSkeletonsSection:AddColorpicker({
+    Name = "Skeleton Color",
+    Flag = "rage_hit_skeletons_color",
+    Value = Color3.fromRGB(155,0,155)
+})
+getgenv().HitSkeletonsDuration = getgenv().RageHitSkeletonsSection:AddSlider({
+    Name = "Skeleton Duration",
+    Flag = "rage_hit_skeletons_duration",
+    Min = 0.1,
+    Max = 5,
+    Decimals = 1,
+    Value = 2
+})
+getgenv().HitSkeletonsThickness = getgenv().RageHitSkeletonsSection:AddSlider({
+    Name = "Skeleton Thickness",
+    Flag = "rage_hit_skeletons_thickness",
+    Min = 0.01,
+    Max = 0.2,
+    Decimals = 2,
+    Value = 0.02
+})
+
+-- Логика HitSkeleton с настройками
+local function HitSkeleton(Player, color, transparency, duration, thickness)
     if not Player or not Player.Character then return end
     local bones = {
         {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
@@ -1282,7 +1305,7 @@ local function HitSkeleton(Player, color, transparency, duration)
         local b = Player.Character:FindFirstChild(pair[2])
         if a and b then
             local line = Instance.new("Part")
-            line.Size = Vector3.new(0.02, 0.02, (a.Position - b.Position).Magnitude)
+            line.Size = Vector3.new(thickness or 0.02, thickness or 0.02, (a.Position - b.Position).Magnitude)
             line.CFrame = CFrame.new(a.Position, b.Position) * CFrame.new(0, 0, -line.Size.Z/2)
             line.Anchored = true
             line.CanCollide = false
@@ -1386,8 +1409,14 @@ end
 
 -- Основная логика обработки попадания по цели (делаем глобальной)
 getgenv().OnTargetHit = function(targetPlayer, damage, remainingHealth, partName, notifyCallback)
-    if notifyCallback then
-        notifyCallback(string.format("Hit %s on %s for %d (%d left)", targetPlayer.DisplayName, partName, damage, remainingHealth))
+    -- Hit notifications
+    if getgenv().HitNotificationsToggle and getgenv().HitNotificationsToggle:Get() then
+        local duration = getgenv().HitNotificationsDuration and getgenv().HitNotificationsDuration:Get() or 2
+        if notifyCallback then
+            notifyCallback(string.format("Hit %s on %s for %d (%d left)", targetPlayer.DisplayName, partName, damage, remainingHealth), duration)
+        elseif getgenv().library and getgenv().library.Notify then
+            getgenv().library:Notify({Text = string.format("Hit %s on %s for %d (%d left)", targetPlayer.DisplayName, partName, damage, remainingHealth), Time = duration})
+        end
     end
     -- HitChams
     if getgenv().HitChamsToggle and getgenv().HitChamsToggle:Get() then
@@ -1395,12 +1424,28 @@ getgenv().OnTargetHit = function(targetPlayer, damage, remainingHealth, partName
     end
     -- HitSkeletons
     if getgenv().HitSkeletonsToggle and getgenv().HitSkeletonsToggle:Get() then
-        local color = getgenv().HitChamsColor and getgenv().HitChamsColor:Get() or Color3.fromRGB(155,0,155)
+        local color = getgenv().HitSkeletonsColor and getgenv().HitSkeletonsColor:Get() or Color3.fromRGB(155,0,155)
         local transparency = getgenv().HitChamsTransparency and getgenv().HitChamsTransparency:Get() or 0.5
-        local duration = getgenv().HitChamsDuration and getgenv().HitChamsDuration:Get() or 2
-        HitSkeleton(targetPlayer, color, transparency, duration)
+        local duration = getgenv().HitSkeletonsDuration and getgenv().HitSkeletonsDuration:Get() or 2
+        local thickness = getgenv().HitSkeletonsThickness and getgenv().HitSkeletonsThickness:Get() or 0.02
+        HitSkeleton(targetPlayer, color, transparency, duration, thickness)
     end
     -- HitSound
     PlayHitSound()
-    -- Здесь можно добавить HitEffect
 end
+
+-- Новая секция Hit notifications справа во вкладке Rage
+getgenv().RageHitNotificationsSection = getgenv().Rage:CreateSection({ Name = "Hit notifications", Side = "Right" })
+getgenv().HitNotificationsToggle = getgenv().RageHitNotificationsSection:AddToggle({
+    Name = "Hit notifications",
+    Flag = "rage_hit_notifications",
+    Value = true
+})
+getgenv().HitNotificationsDuration = getgenv().RageHitNotificationsSection:AddSlider({
+    Name = "Notification Duration",
+    Flag = "rage_hit_notifications_duration",
+    Min = 0.5,
+    Max = 5,
+    Decimals = 1,
+    Value = 2
+})
