@@ -1,0 +1,589 @@
+local env = {
+    -- Roblox сервисы
+    Players = game:GetService("Players"),
+    Workspace = game:GetService("Workspace"),
+    UserInputService = game:GetService("UserInputService"),
+    RunService = game:GetService("RunService"),
+    TweenService = game:GetService("TweenService"),
+    -- Часто используемые объекты
+    Camera = workspace.CurrentCamera,
+    LocalPlayer = game:GetService("Players").LocalPlayer,
+    -- Части тела
+    r15 = {
+        "Head","UpperTorso","LowerTorso","HumanoidRootPart","LeftUpperArm","LeftLowerArm","LeftHand",
+        "RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot",
+        "RightUpperLeg","RightLowerLeg","RightFoot"
+    },
+    -- Математика и утилиты
+    math = math,
+    CFrame = CFrame,
+    Vector3 = Vector3,
+    Vector2 = Vector2,
+    tick = tick,
+    huge = math.huge,
+}
+
+getgenv().library, getgenv().library_flags, getgenv().subs = loadstring(game:HttpGet("https://raw.githubusercontent.com/xzcReasd/WhoAsking/refs/heads/main/Uilib"))();
+getgenv().Wait = getgenv().subs.Wait -- Only returns if the GUI has not been terminated. For 'while Wait() do' loops
+
+getgenv().PepsisWorld = getgenv().library:CreateWindow({
+    Name = "NIGGER.TAPBOT",
+    Themeable = {
+        Info = "u tapped"
+    }
+})
+getgenv().Rage = getgenv().PepsisWorld:CreateTab({
+    Name = "rage"
+})
+getgenv().Misc = getgenv().PepsisWorld:CreateTab({
+    Name = "misc"
+})
+getgenv().Visuals = getgenv().PepsisWorld:CreateTab({
+    Name = "visuals"
+})
+getgenv().Player = getgenv().PepsisWorld:CreateTab({
+    Name = "player"
+})
+
+getgenv().RagebotSection = getgenv().Rage:CreateSection({
+    Name = "Ragebot"
+})
+
+getgenv().ragebotToggle = getgenv().RagebotSection:AddToggle({
+    Name = "Ragebot Enabled",
+    Flag = "ragebot_enabled",
+    Value = false,
+    Callback = function(val)
+        getgenv().SA = getgenv().SA or {O = {}, S = {}}
+        getgenv().SA.O.E = val
+    end
+})
+
+getgenv().predXZ = getgenv().RagebotSection:AddTextbox({
+    Name = "Prediction XZ",
+    Flag = "ragebot_pred_xz",
+    Value = 0.12362,
+    Type = "number",
+    Callback = function(val, old)
+        getgenv().SA = getgenv().SA or {O = {}, S = {}}
+        getgenv().SA.S.PXZ = tonumber(val) or 0
+        getgenv().library:Notify({Text = "Prediction XZ установлен на: " .. tostring(val), Time = 2})
+    end
+})
+
+getgenv().predY = getgenv().RagebotSection:AddTextbox({
+    Name = "Prediction Y",
+    Flag = "ragebot_pred_y",
+    Value = 0.12362,
+    Type = "number",
+    Callback = function(val, old)
+        getgenv().SA = getgenv().SA or {O = {}, S = {}}
+        getgenv().SA.S.PY = tonumber(val) or 0
+        getgenv().library:Notify({Text = "Prediction Y установлен на: " .. tostring(val), Time = 2})
+    end
+})
+
+getgenv().aimingMethodDropdown = getgenv().RagebotSection:AddDropdown({
+    Name = "AimingMethod",
+    Flag = "ragebot_aiming_method",
+    List = {"index", "namecall"},
+    Value = "index",
+    Callback = function(val)
+        getgenv().SA = getgenv().SA or {O = {}, S = {}}
+        getgenv().SA.AM = val
+        getgenv().library:Notify({Text = "AimingMethod: " .. tostring(val), Time = 2})
+    end
+})
+
+getgenv().S = {
+    Plrs = env.Players,
+    Wksp = env.Workspace,
+    UIS = env.UserInputService,
+    RunS = env.RunService,
+    Cam = env.Camera,
+    LPlr = env.LocalPlayer,
+    TPlr = nil,
+    TP = nil,
+    -- другие переменные по необходимости
+}
+
+getgenv().PredSec = getgenv().Rage:CreateSection({ Name = "Pred/Res/Offs", Side = "Left" })
+function ePRED() getgenv().SA = getgenv().SA or {O = {}, S = {}, PRED = {}, PARTS = {}, CHECKS = {}}; getgenv().SA.PRED = getgenv().SA.PRED or {}; return getgenv().SA.PRED end
+
+getgenv().PredMode = getgenv().PredSec:AddDropdown({
+    Name = "PredMode",
+    Flag = "pred_mode",
+    List = {"Default", "Sets", "Math", "Calc"},
+    Value = "Default",
+    Callback = function(v) local p = ePRED(); p.Mode = v or "Default"; getgenv().library:Notify({Text = "PredMode: "..tostring(v), Time = 2}) end
+})
+getgenv().APred = getgenv().PredSec:AddToggle({
+    Name = "AutoPred",
+    Flag = "a_pred",
+    Value = false,
+    Callback = function(v) local p = ePRED(); p.Auto = v and true or false; getgenv().library:Notify({Text = "APred: "..tostring(v), Time = 2}) end
+})
+getgenv().Ping = getgenv().PredSec:AddTextbox({
+    Name = "Ping",
+    Flag = "ping",
+    Value = 50,
+    Type = "number",
+    Callback = function(v) local p = ePRED(); p.Ping = tonumber(v) or 50; getgenv().library:Notify({Text = "Ping: "..tostring(v), Time = 2}) end
+})
+getgenv().Div = getgenv().PredSec:AddToggle({
+    Name = "Division",
+    Flag = "div",
+    Value = false,
+    Callback = function(v) local p = ePRED(); p.Division = v and true or false; getgenv().library:Notify({Text = "Div: "..tostring(v), Time = 2}) end
+})
+getgenv().Res = getgenv().PredSec:AddDropdown({
+    Name = "Res",
+    Flag = "res",
+    List = {"None", "Recalc", "MoveDir", "LookV", "Vel", "MoveD", "CalcCF"},
+    Value = "None",
+    Callback = function(v) local p = ePRED(); p.Resolver = v or "None"; getgenv().library:Notify({Text = "Res: "..tostring(v), Time = 2}) end
+})
+getgenv().JmpOfs = getgenv().PredSec:AddTextbox({
+    Name = "JmpOfs",
+    Flag = "jmp_ofs",
+    Value = 0,
+    Type = "number",
+    Callback = function(v) local p = ePRED(); p.JumpOffset = tonumber(v) or 0; getgenv().library:Notify({Text = "JmpOfs: "..tostring(v), Time = 2}) end
+})
+getgenv().FallOfs = getgenv().PredSec:AddTextbox({
+    Name = "FallOfs",
+    Flag = "fall_ofs",
+    Value = 0,
+    Type = "number",
+    Callback = function(v) local p = ePRED(); p.FallOffset = tonumber(v) or 0; getgenv().library:Notify({Text = "FallOfs: "..tostring(v), Time = 2}) end
+})
+
+getgenv().PartSec = getgenv().Rage:CreateSection({ Name = "Parts", Side = "Right" })
+function ePARTS() getgenv().SA.PARTS = getgenv().SA.PARTS or {}; return getgenv().SA.PARTS end
+getgenv().r15 = env.r15
+getgenv().AimPrt = getgenv().PartSec:AddDropdown({
+    Name = "AimPrt",
+    Flag = "aim_prt",
+    List = getgenv().r15,
+    Value = "HumanoidRootPart",
+    Callback = function(v) local p = ePARTS(); p.SelectedPart = v or "HumanoidRootPart" end
+})
+getgenv().AirPrt = getgenv().PartSec:AddDropdown({
+    Name = "AirPrt",
+    Flag = "air_prt",
+    List = getgenv().r15,
+    Value = "RightFoot",
+    Callback = function(v) local p = ePARTS(); p.AirPart = v or "RightFoot" end
+})
+
+getgenv().ChkSec = getgenv().Rage:CreateSection({ Name = "Checks", Side = "Right" })
+function eCHK() getgenv().SA.CHECKS = getgenv().SA.CHECKS or {}; return getgenv().SA.CHECKS end
+getgenv().KO = getgenv().ChkSec:AddToggle({ Name = "KO", Flag = "ko", Value = true, Callback = function(v) local c = eCHK(); c.KOCheck = v end })
+getgenv().Wall = getgenv().ChkSec:AddToggle({ Name = "Wall", Flag = "wall", Value = false, Callback = function(v) local c = eCHK(); c.WallCheck = v end })
+getgenv().Frnd = getgenv().ChkSec:AddToggle({ Name = "Friend", Flag = "frnd", Value = false, Callback = function(v) local c = eCHK(); c.FriendCheck = v end })
+getgenv().Veh = getgenv().ChkSec:AddToggle({ Name = "Vehicle", Flag = "veh", Value = false, Callback = function(v) local c = eCHK(); c.VehicleCheck = v end })
+getgenv().Seat = getgenv().ChkSec:AddToggle({ Name = "Seat", Flag = "seat", Value = false, Callback = function(v) local c = eCHK(); c.SeatedCheck = v end })
+getgenv().Death = getgenv().ChkSec:AddToggle({ Name = "Death", Flag = "death", Value = false, Callback = function(v) local c = eCHK(); c.DeathCheck = v end })
+
+getgenv().targetPickKey = getgenv().RagebotSection:AddKeybind({
+    Name = "Target Pick Key",
+    Flag = "ragebot_target_pick_key",
+    Value = nil, -- по умолчанию бинда нет
+    Callback = function(val)
+        getgenv().SA = getgenv().SA or {O = {}, S = {}}
+        if val and typeof(val) == "EnumItem" then
+            getgenv().SA.O.TK = tostring(val):gsub("Enum.KeyCode.", "")
+        else
+            getgenv().SA.O.TK = nil
+        end
+    end
+})
+
+-- Интеграция аимбота (один раз)
+if not getgenv()._ragebot_loaded then
+    loadstring(game:HttpGet('https://pastebin.com/raw/gimbTwW1'))() --ac bypass just put in first strings of script
+    getgenv()._ragebot_loaded = true
+    -- Установим дефолтные значения для SA, если не были заданы
+    getgenv().SA = getgenv().SA or {O = {}, S = {}}
+    getgenv().SA.O.E = getgenv().ragebotToggle:Get()
+    getgenv().SA.O.TK = tostring(getgenv().targetPickKey:Get()):gsub("Enum.KeyCode.", "")
+    getgenv().SA.S.PXZ = tonumber(getgenv().predXZ:Get()) or 0.12362
+    getgenv().SA.S.PY = tonumber(getgenv().predY:Get()) or 0.12362
+    getgenv().SA.S.P = "HumanoidRootPart"
+    getgenv().SA.PRED = getgenv().SA.PRED or {}
+    getgenv().SA.PRED.Mode = getgenv().PredMode:Get() or "Default"
+    getgenv().SA.PRED.Auto = getgenv().APred:Get()
+    getgenv().SA.PRED.Ping = tonumber(getgenv().Ping:Get()) or 50
+    getgenv().SA.PRED.Division = getgenv().Div:Get()
+    getgenv().SA.PRED.Resolver = getgenv().Res:Get() or "None"
+    getgenv().SA.PRED.JumpOffset = tonumber(getgenv().JmpOfs:Get()) or 0
+    getgenv().SA.PRED.FallOffset = tonumber(getgenv().FallOfs:Get()) or 0
+    getgenv().SA.PARTS = getgenv().SA.PARTS or {}
+    getgenv().SA.PARTS.SelectedPart = getgenv().AimPrt:Get() or "HumanoidRootPart"
+    getgenv().SA.PARTS.AirPart = getgenv().AirPrt:Get() or "RightFoot"
+    getgenv().SA.CHECKS = getgenv().SA.CHECKS or {}
+    getgenv().SA.CHECKS.KOCheck = getgenv().KO:Get()
+    getgenv().SA.CHECKS.WallCheck = getgenv().Wall:Get()
+    getgenv().SA.CHECKS.FriendCheck = getgenv().Frnd:Get()
+    getgenv().SA.CHECKS.VehicleCheck = getgenv().Veh:Get()
+    getgenv().SA.CHECKS.SeatedCheck = getgenv().Seat:Get()
+    getgenv().SA.CHECKS.DeathCheck = getgenv().Death:Get()
+end
+
+-- Логика рейджбота (аимбота)
+do
+    getgenv().TP = nil -- Вынесено в do, чтобы сбрасывать цель
+    function syncSA()
+        getgenv().SA = getgenv().SA or {O = {}, S = {}, PRED = {}, PARTS = {}, CHECKS = {}}
+        getgenv().SA.PRED = getgenv().SA.PRED or {}
+        getgenv().SA.O.E = getgenv().library_flags["ragebot_enabled"]
+        getgenv().key = getgenv().library_flags["ragebot_target_pick_key"]
+        if typeof(getgenv().key) == "EnumItem" then
+            getgenv().SA.O.TK = tostring(getgenv().key):gsub("Enum.KeyCode.", "")
+        else
+            getgenv().SA.O.TK = nil
+        end
+        getgenv().SA.S.PXZ = tonumber(getgenv().library_flags["ragebot_pred_xz"]) or 0.12362
+        getgenv().SA.S.PY = tonumber(getgenv().library_flags["ragebot_pred_y"]) or 0.12362
+        getgenv().SA.S.P = "HumanoidRootPart"
+        getgenv().SA.AM = getgenv().library_flags["ragebot_aiming_method"] or "index"
+        getgenv().pred = getgenv().SA.PRED
+        getgenv().pred.Mode = getgenv().library_flags["ragebot_prediction_mode"] or "Default"
+        getgenv().pred.Auto = getgenv().library_flags["ragebot_auto_prediction"] and true or false
+        getgenv().pred.Ping = tonumber(getgenv().library_flags["ragebot_ping_value"]) or 50
+        getgenv().pred.Division = getgenv().library_flags["ragebot_division_mode"] and true or false
+        getgenv().pred.Resolver = getgenv().library_flags["ragebot_resolver"] or "None"
+        getgenv().pred.JumpOffset = tonumber(getgenv().library_flags["ragebot_jump_offset"]) or 0
+        getgenv().pred.FallOffset = tonumber(getgenv().library_flags["ragebot_fall_offset"]) or 0
+        getgenv().SA.PARTS = getgenv().SA.PARTS or {}
+        getgenv().SA.PARTS.SelectedPart = getgenv().AimPrt:Get() or "HumanoidRootPart"
+        getgenv().SA.PARTS.AirPart = getgenv().AirPrt:Get() or "RightFoot"
+        getgenv().SA.CHECKS = getgenv().SA.CHECKS or {}
+        getgenv().SA.CHECKS.KOCheck = getgenv().KO:Get()
+        getgenv().SA.CHECKS.WallCheck = getgenv().Wall:Get()
+        getgenv().SA.CHECKS.FriendCheck = getgenv().Frnd:Get()
+        getgenv().SA.CHECKS.VehicleCheck = getgenv().Veh:Get()
+        getgenv().SA.CHECKS.SeatedCheck = getgenv().Seat:Get()
+        getgenv().SA.CHECKS.DeathCheck = getgenv().Death:Get()
+    end
+
+    -- Синхронизация при изменении UI
+    getgenv().ragebotToggle.Options.Callback = function(val)
+        syncSA()
+    end
+    getgenv().targetPickKey.Options.Callback = function(val)
+        syncSA()
+    end
+    getgenv().predXZ.Options.Callback = function(val)
+        syncSA()
+    end
+    getgenv().predY.Options.Callback = function(val)
+        syncSA()
+    end
+    getgenv().aimingMethodDropdown.Options.Callback = function(val)
+        getgenv().SA.AM = val
+        updateHooks()
+    end
+    getgenv().PredMode.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.Mode = v
+    end
+    getgenv().APred.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.Auto = v
+    end
+    getgenv().Ping.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.Ping = tonumber(v) or 50
+    end
+    getgenv().Div.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.Division = v
+    end
+    getgenv().Res.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.Resolver = v
+    end
+    getgenv().JmpOfs.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.JumpOffset = tonumber(v) or 0
+    end
+    getgenv().FallOfs.Options.Callback = function(v)
+        getgenv().pred = ePRED()
+        getgenv().pred.FallOffset = tonumber(v) or 0
+    end
+    getgenv().AimPrt.Options.Callback = function(v)
+        getgenv().parts = ePARTS()
+        getgenv().parts.SelectedPart = v
+    end
+    getgenv().AirPrt.Options.Callback = function(v)
+        getgenv().parts = ePARTS()
+        getgenv().parts.AirPart = v
+    end
+    getgenv().KO.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.KOCheck = v end
+    getgenv().Wall.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.WallCheck = v end
+    getgenv().Frnd.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.FriendCheck = v end
+    getgenv().Veh.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.VehicleCheck = v end
+    getgenv().Seat.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.SeatedCheck = v end
+    getgenv().Death.Options.Callback = function(v) getgenv().checks = eCHK(); getgenv().checks.DeathCheck = v end
+
+    -- Инициализация SA при запуске
+    syncSA()
+
+    -- Основная логика аимбота
+    function startRagebot()
+        if getgenv().L then return end
+        getgenv().SA = getgenv().SA
+        getgenv().P = game:GetService("Players")
+        getgenv().W = game:GetService("Workspace")
+        getgenv().UI = game:GetService("UserInputService")
+        getgenv().LP = getgenv().P.LocalPlayer
+        getgenv().C = getgenv().W.CurrentCamera
+        getgenv().FFC = game.FindFirstChild
+        getgenv().GP = getgenv().P.GetPlayers
+        getgenv().GML = getgenv().UI.GetMouseLocation
+        getgenv().WTVP = getgenv().C.WorldToViewportPoint
+        getgenv().NV2 = env.Vector2.new
+        getgenv().NC = env.CFrame.new
+        getgenv().I = env.huge
+        getgenv().LPOS = nil
+        getgenv().LUT = nil
+        getgenv().PPOS = nil
+        function IPA(p) return p.Character and getgenv().FFC(p.Character, "Humanoid") and p.Character.Humanoid.Health > 0 end
+        function GCP()
+            local SD = getgenv().I
+            local CP = nil
+            local MP = getgenv().GML(getgenv().UI)
+            local PT = getgenv().SA.S.P
+            for _, p in next, getgenv().GP(getgenv().P) do
+                local c = p.Character
+                if p ~= getgenv().LP and IPA(p) and c:FindFirstChild(PT) then
+                    local OSP, IOS = getgenv().WTVP(getgenv().C, c[PT].Position)
+                    local D = (getgenv().NV2(OSP.X, OSP.Y) - MP).Magnitude
+                    if D < SD and IOS then CP = p SD = D end
+                end
+            end
+            return CP
+        end
+        function GPP(tp)
+            if tp and tp.Character and tp.Character:FindFirstChild(getgenv().SA.S.P) then
+                local APP = tp.Character[getgenv().SA.S.P].Position
+                if not getgenv().LPOS or not getgenv().LUT then
+                    getgenv().LPOS = APP
+                    getgenv().LUT = getgenv().tick()
+                    local PPOS = APP
+                    return PPOS
+                end
+                local CT = getgenv().tick()
+                local DT = CT - getgenv().LUT
+                local V = tp.Character[getgenv().SA.S.P].Velocity
+                local PPOS = APP + env.Vector3.new(V.X * getgenv().SA.S.PXZ, V.Y * getgenv().SA.S.PY, V.Z * getgenv().SA.S.PXZ)
+                getgenv().LUT = CT
+                getgenv().LPOS = APP
+                return PPOS
+            end
+            return nil
+        end
+        -- Hooks
+        getgenv().MT = getrawmetatable(game)
+        -- getgenv().oldIndex, getgenv().oldNamecall -- удалено, не нужно
+        local function setIndexHook()
+            if getgenv().oldIndex then return end
+            getgenv().oldIndex = hookmetamethod(game, "__index", function(self, k)
+                if not checkcaller() and self == getgenv().LP:GetMouse() and getgenv().SA.O.E and getgenv().TP then
+                    if k == "Hit" or k == "Target" then
+                        if IPA(getgenv().TP) and getgenv().TP.Character:FindFirstChild(getgenv().SA.S.P) then
+                            getgenv().FP = GPP(getgenv().TP)
+                            getgenv().TPT = getgenv().TP.Character[getgenv().SA.S.P]
+                            return k == "Hit" and (getgenv().FP and getgenv().NC(getgenv().FP) or getgenv().NC(getgenv().TPT.Position)) or getgenv().TPT
+                        else
+                            getgenv().TP = nil
+                        end
+                    end
+                end
+                return getgenv().oldIndex(self, k)
+            end)
+        end
+        local function setNamecallHook()
+            if getgenv().oldNamecall then return end
+            getgenv().Argumen = {"UpdateMousePos", "GetMousePos", "MousePos", "MOUSE", "MousePosUpdate", "UpdateMousePosI2", "UpdateMousePosI", "UpdateAim"}
+            getgenv().oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                getgenv().args = {...}
+                getgenv().method = getnamecallmethod()
+                if getgenv().method == "FireServer" and getgenv().SA.O.E and getgenv().TP and IPA(getgenv().TP) and getgenv().TP.Character:FindFirstChild(getgenv().SA.S.P) then
+                    if #getgenv().args >= 2 then
+                        for _, methodName in ipairs(getgenv().Argumen) do
+                            if getgenv().args[2] == methodName then
+                                getgenv().args[3] = GPP(getgenv().TP)
+                                return getgenv().oldNamecall(self, unpack(getgenv().args))
+                            end
+                        end
+                    end
+                end
+                return getgenv().oldNamecall(self, ...)
+            end)
+        end
+        local function resetHooks()
+            if getgenv().oldIndex then
+                hookmetamethod(game, "__index", getgenv().oldIndex)
+                getgenv().oldIndex = nil
+            end
+            if getgenv().oldNamecall then
+                hookmetamethod(game, "__namecall", getgenv().oldNamecall)
+                getgenv().oldNamecall = nil
+            end
+        end
+        local function updateHooks()
+            resetHooks()
+            if getgenv().SA.AM == "namecall" then
+                setNamecallHook()
+            else
+                setIndexHook()
+            end
+        end
+        -- Инициализация хуков
+        updateHooks()
+
+        -- Prediction tables
+        getgenv().predictionTable = {
+            {20, 0.08960952}, {30, 0.11252476}, {50, 0.13544}, {65, 0.1264236}, {70, 0.12533}, {80, 0.139340},
+            {100, 0.141987}, {110, 0.144634}, {120, 0.147281}, {130, 0.149928}, {140, 0.152575}, {150, 0.155222},
+            {160, 0.157869}, {170, 0.160516}, {180, 0.163163}, {190, 0.165810}, {200, 0.168457}, {210, 0.171104},
+            {220, 0.173751}, {230, 0.176398}, {240, 0.179045}, {250, 0.181692}, {260, 0.184339}, {270, 0.186986},
+            {280, 0.189633}, {290, 0.192280}, {300, 0.194927}
+        }
+        getgenv().sigma_table = {
+            {0, 0.04070}, {30, 0.05078}
+        }
+        function calculate(Ping)
+            return (Ping / 1000) + 0.037
+        end
+        function fiCl(tb, pg)
+            getgenv().clVa, getgenv().clDi = nil, env.huge
+            for _, en in ipairs(tb) do
+                getgenv().di = math.abs(pg - en[1])
+                if getgenv().di < getgenv().clDi then getgenv().clDi, getgenv().clVa = getgenv().di, en[2] end
+            end
+            return getgenv().clVa
+        end
+        function updatePredictionValue(pg, SA)
+            local pred = SA.PRED or {}
+            if pg and pred.Auto then
+                local mo = pred.Mode
+                if mo == "Default" or mo == "Sets Based" then
+                    local clVa = fiCl(mo == "Sets Based" and getgenv().predictionTable or getgenv().sigma_table, pg)
+                    if clVa then
+                        pred.Horizontal = clVa
+                        pred.Vertical = clVa * (mo == "Sets Based" and 0.910 or 1)
+                    end
+                elseif mo == "Math Based" then
+                    local function gePr(fa, ad)
+                        return fa * math.log(pg + 1) + ad
+                    end
+                    pred.Horizontal = gePr(0.105, -0.342665)
+                    pred.Vertical = gePr(0.1, -0.3405)
+                elseif mo == "Calculate" then
+                    local calcValue = calculate(pg)
+                    pred.Horizontal = calcValue
+                    pred.Vertical = calcValue
+                end
+            end
+            SA.PRED = pred
+        end
+        -- Resolver calculations for target position
+        function TargetFuturePosition(SA, TargetPlr, lastPos, lastTick, currentTick)
+            local pred = SA.PRED or {}
+            local velocity = env.Vector3.new(0, 0, 0)
+            local currentPos = TargetPlr.Character.HumanoidRootPart.Position
+            local predictedPos = currentPos
+            local horizontalPrediction = pred.Horizontal or SA.S.PXZ
+            local verticalPrediction = pred.Vertical or SA.S.PY
+            local jumpOffset = pred.JumpOffset or 0
+            local fallOffset = pred.FallOffset or 0
+            local resolver = pred.Resolver or "None"
+            if resolver == "Recalculate" then
+                if lastPos then
+                    local delta = currentTick - lastTick
+                    if delta > 0 then
+                        local positionDifference = currentPos - lastPos
+                        velocity = positionDifference / delta
+                    end
+                end
+            elseif resolver == "MoveDirection" then
+                local humanoid = TargetPlr.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    velocity = humanoid.MoveDirection * humanoid.WalkSpeed
+                end
+            elseif resolver == "LookVector" then
+                velocity = TargetPlr.Character.HumanoidRootPart.CFrame.LookVector * (horizontalPrediction or 1) * 1.5
+            elseif resolver == "Velocity" then
+                velocity = TargetPlr.Character.HumanoidRootPart.Velocity
+            elseif resolver == "Move direction" then
+                local humanoid = TargetPlr.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    velocity = humanoid.MoveDirection * ((horizontalPrediction or 1) * 10)
+                end
+            elseif resolver == "Calculate CFrame" then
+                if lastPos and lastTick then
+                    local deltaTime = currentTick - lastTick
+                    if deltaTime > 0 then
+                        local distance = (currentPos - lastPos).Magnitude
+                        if distance < 0.001 then
+                            predictedPos = currentPos
+                        else
+                            local predictedDistance = (distance / deltaTime) * (0.1 * (horizontalPrediction * 10))
+                            predictedPos = currentPos + (currentPos - lastPos).Unit * predictedDistance
+                            local yChange = (currentPos.Y - lastPos.Y) / deltaTime * (0.1 * verticalPrediction)
+                            predictedPos = predictedPos + env.Vector3.new(0, yChange, 0)
+                        end
+                    end
+                end
+            else
+                velocity = TargetPlr.Character.HumanoidRootPart.AssemblyLinearVelocity or TargetPlr.Character.HumanoidRootPart.Velocity
+            end
+            if resolver ~= "Calculate CFrame" then
+                if pred.Division then
+                    predictedPos = env.Vector3.new(
+                        currentPos.X + (velocity.X / horizontalPrediction),
+                        currentPos.Y + (velocity.Y / verticalPrediction),
+                        currentPos.Z + (velocity.Z / horizontalPrediction)
+                    ) + env.Vector3.new(0, jumpOffset + fallOffset, 0)
+                else
+                    predictedPos = env.Vector3.new(
+                        currentPos.X + (velocity.X * horizontalPrediction),
+                        currentPos.Y + (velocity.Y * verticalPrediction),
+                        currentPos.Z + (velocity.Z * horizontalPrediction)
+                    ) + env.Vector3.new(0, jumpOffset + fallOffset, 0)
+                end
+            end
+            return env.CFrame.new(predictedPos)
+        end
+        -- Остальной код (UI.InputBegan, TP и т.д.)
+        getgenv().UI.InputBegan:Connect(function(i, gpe)
+            if not gpe and getgenv().SA.O.TK and i.KeyCode == Enum.KeyCode[getgenv().SA.O.TK] then
+                if getgenv().TP then
+                    getgenv().TP = nil -- Сброс цели при повторном нажатии
+                else
+                    getgenv().TP = GCP()
+                end
+            end
+        end)
+        getgenv().LP.CharacterAdded:Connect(function() getgenv().TP = nil end)
+        getgenv().L = true
+    end
+
+    -- Запуск логики, если не была запущена
+    if not getgenv().L then
+        startRagebot()
+    end
+end
+
+-- Вставить в RunService/Stepped или аналогичный цикл:
+getgenv().S.RunS.Stepped:Connect(function()
+    if getgenv().S.TPlr and getgenv().SA.CHECKS and getgenv().SA.CHECKS.DeathCheck then
+        getgenv().h = getgenv().S.TPlr.Character and getgenv().S.TPlr.Character:FindFirstChildOfClass("Humanoid")
+        if not getgenv().h or getgenv().h.Health <= 0 then
+            getgenv().S.TPlr = nil
+        end
+    end
+end)
